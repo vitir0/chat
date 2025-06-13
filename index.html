@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=272, height=340, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Apple Watch Chat - Рабочая версия</title>
+    <title>Apple Watch Realtime Chat</title>
     <style>
+        /* Стили остаются без изменений */
         * {
             box-sizing: border-box;
             font-family: -apple-system, BlinkMacSystemFont, "San Francisco", sans-serif;
@@ -216,138 +217,120 @@
             border-radius: 2px;
         }
     </style>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="watch-container">
         <div class="watch-screen">
             <div class="chat-header">
                 <span id="header-text">Apple Watch Chat</span>
-                <div class="status-bar" id="status-bar">✓ Работает</div>
+                <div class="status-bar" id="status-bar">✓ Подключение...</div>
             </div>
             <div id="chat-container">
-                <div class="empty-chat" id="empty-chat">Начните общение!<br>Отправьте первое сообщение.</div>
-                <div class="typing-indicator" id="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
+                <div class="empty-chat" id="empty-chat">Загрузка чата...</div>
             </div>
             <div class="input-area">
-                <input type="text" id="message-input" placeholder="Сообщение..." autocomplete="off">
-                <button id="send-button">↑</button>
+                <input type="text" id="message-input" placeholder="Сообщение..." autocomplete="off" disabled>
+                <button id="send-button" disabled>↑</button>
             </div>
         </div>
         <div class="digital-crown"></div>
     </div>
 
     <script>
-        // Улучшенное хранилище сообщений
-        const CHAT_STORAGE_KEY = 'apple_watch_chat_messages_v2';
-        const USER_STORAGE_KEY = 'apple_watch_chat_user_v2';
+        // Конфигурация Firebase (замените на свою)
+        const firebaseConfig = {
+            apiKey: "AIzaSyD4dA2Q1b1v3dJ6Q8z7v0KbXmZ7bVfY7j8",
+            authDomain: "apple-watch-chat-demo.firebaseapp.com",
+            databaseURL: "https://apple-watch-chat-demo-default-rtdb.firebaseio.com",
+            projectId: "apple-watch-chat-demo",
+            storageBucket: "apple-watch-chat-demo.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcd1234efgh5678ijkl90"
+        };
+
+        // Инициализация Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        // Ссылки на элементы
+        const chatContainer = document.getElementById('chat-container');
+        const emptyChat = document.getElementById('empty-chat');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const statusBar = document.getElementById('status-bar');
+        const headerText = document.getElementById('header-text');
         
         // Данные пользователя
-        let username = localStorage.getItem(USER_STORAGE_KEY);
+        let username = localStorage.getItem('chat_username');
         let userDevice = 'Apple Watch';
-        let messages = [];
+        let userId = localStorage.getItem('chat_user_id');
         
-        // Инициализация при загрузке
-        function init() {
-            // Проверка и восстановление данных
-            checkStorage();
-            
-            // Определение устройства
+        // Определение устройства
+        function detectDevice() {
             const ua = navigator.userAgent;
-            if (/iPhone|iPad|iPod/.test(ua)) userDevice = 'iPhone';
-            else if (/Android/.test(ua)) userDevice = 'Android';
+            if (ua.includes('Apple Watch')) return 'Apple Watch Series 3';
+            if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+            if (/Android/.test(ua)) return 'Android';
+            return 'Desktop';
+        }
+        
+        // Инициализация чата
+        function initChat() {
+            // Определяем устройство
+            userDevice = detectDevice();
             
-            // Получение имени пользователя
+            // Получаем имя пользователя
             if (!username) {
                 username = prompt("Введите ваш никнейм:") || "Гость_" + Math.floor(Math.random() * 1000);
-                localStorage.setItem(USER_STORAGE_KEY, username);
+                localStorage.setItem('chat_username', username);
             }
             
-            document.getElementById('header-text').textContent = `${username} · ${userDevice}`;
+            // Генерируем ID пользователя
+            if (!userId) {
+                userId = Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('chat_user_id', userId);
+            }
             
-            // Загрузка истории сообщений
+            headerText.textContent = `${username} · ${userDevice}`;
+            statusBar.textContent = "✓ Подключение...";
+            
+            // Включаем поле ввода
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            messageInput.focus();
+            
+            // Загружаем сообщения
             loadMessages();
-            
-            // Установка обработчиков событий
-            document.getElementById('send-button').addEventListener('click', sendMessage);
-            document.getElementById('message-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') sendMessage();
-            });
-            
-            // Автофокус на поле ввода
-            document.getElementById('message-input').focus();
-            
-            // Проверка поддержки localStorage
-            if (!isLocalStorageSupported()) {
-                showError("Ваш браузер не поддерживает сохранение сообщений");
-            }
         }
         
-        // Проверка и восстановление хранилища
-        function checkStorage() {
-            try {
-                const storedMessages = localStorage.getItem(CHAT_STORAGE_KEY);
-                if (storedMessages) {
-                    messages = JSON.parse(storedMessages);
-                }
-            } catch (e) {
-                console.error('Ошибка восстановления сообщений:', e);
-                localStorage.removeItem(CHAT_STORAGE_KEY);
-                messages = [];
-            }
-        }
-        
-        // Проверка поддержки localStorage
-        function isLocalStorageSupported() {
-            try {
-                const testKey = '__test__';
-                localStorage.setItem(testKey, testKey);
-                localStorage.removeItem(testKey);
-                return true;
-            } catch (e) {
-                return false;
-            }
-        }
-        
-        // Показать ошибку
-        function showError(message) {
-            const statusBar = document.getElementById('status-bar');
-            statusBar.textContent = "⚠️ " + message;
-            statusBar.style.color = "#ff3b30";
-        }
-        
-        // Загрузка сообщений
+        // Загрузка сообщений в реальном времени
         function loadMessages() {
-            const chatContainer = document.getElementById('chat-container');
-            const emptyChat = document.getElementById('empty-chat');
+            statusBar.textContent = "✓ Загрузка сообщений...";
             
-            // Очищаем контейнер, если есть сообщения
-            if (messages.length > 0) {
+            const messagesRef = database.ref('messages');
+            
+            // Слушаем новые сообщения
+            messagesRef.on('child_added', (snapshot) => {
+                const message = snapshot.val();
+                addMessageToChat(
+                    message.user.name, 
+                    message.user.device, 
+                    message.text,
+                    new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    message.user.id === userId
+                );
+                
+                statusBar.textContent = "✓ Онлайн";
                 emptyChat.style.display = 'none';
-                chatContainer.innerHTML = '';
-            } else {
-                emptyChat.style.display = 'block';
-            }
-            
-            // Добавляем все сообщения
-            messages.forEach(msg => {
-                addMessageToChat(msg.user, msg.device, msg.content, msg.timestamp, msg.isSelf);
             });
         }
         
-        // Добавление сообщения в чат
+        // Добавление сообщения в интерфейс
         function addMessageToChat(user, device, content, timestamp, isSelf = false) {
-            const chat = document.getElementById('chat-container');
-            const emptyChat = document.getElementById('empty-chat');
-            
-            // Скрываем сообщение о пустом чате
-            if (emptyChat.style.display !== 'none') {
-                emptyChat.style.display = 'none';
-            }
-            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isSelf ? 'self' : 'other'}`;
             messageDiv.innerHTML = `
@@ -359,97 +342,53 @@
                 <div class="message-time">${timestamp}</div>
             `;
             
-            chat.appendChild(messageDiv);
-            chat.scrollTop = chat.scrollHeight;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
         // Отправка сообщения
         function sendMessage() {
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
+            const text = messageInput.value.trim();
+            if (!text) return;
             
-            if (message) {
-                const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                
-                // Добавляем сообщение в интерфейс
-                addMessageToChat(username, userDevice, message, timestamp, true);
-                
-                // Сохраняем сообщение в localStorage
-                messages.push({
-                    user: username,
-                    device: userDevice,
-                    content: message,
-                    timestamp: timestamp,
-                    isSelf: true
-                });
-                
-                // Ограничиваем историю 100 сообщениями
-                if (messages.length > 100) {
-                    messages = messages.slice(-100);
-                }
-                
-                // Сохраняем в localStorage
-                saveMessages();
-                
-                // Показываем индикатор набора текста
-                const typingIndicator = document.getElementById('typing-indicator');
-                typingIndicator.style.display = 'block';
-                input.value = '';
-                
-                // Создаем "ответ" от другого пользователя
-                setTimeout(() => {
-                    typingIndicator.style.display = 'none';
-                    
-                    const responses = [
-                        "Привет! Как дела?",
-                        "Рад тебя видеть в чате!",
-                        "Что нового?",
-                        "Отличное сообщение!",
-                        "Я тоже пользуюсь этим чатом",
-                        "Этот чат работает на GitHub Pages",
-                        "Очень удобно общаться прямо с часов",
-                        "Попробуй отправить еще одно сообщение",
-                        "Надеюсь, у тебя хороший день",
-                        "Интересно, как работает эта технология",
-                        "Apple Watch - это круто, согласен?",
-                        "Ты часто пользуешься часами для общения?",
-                        "Это сообщение пришло с сервера GitHub",
-                        "Чат отлично работает на Apple Watch Series 3"
-                    ];
-                    
-                    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-                    const responseTimestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    // Добавляем ответ в интерфейс
-                    addMessageToChat("Собеседник", "iPhone", randomResponse, responseTimestamp, false);
-                    
-                    // Сохраняем ответ в localStorage
-                    messages.push({
-                        user: "Собеседник",
-                        device: "iPhone",
-                        content: randomResponse,
-                        timestamp: responseTimestamp,
-                        isSelf: false
-                    });
-                    
-                    // Сохраняем в localStorage
-                    saveMessages();
-                }, 1500 + Math.random() * 2000);
-            }
+            // Блокируем кнопку на время отправки
+            sendButton.disabled = true;
+            
+            // Отправляем сообщение
+            const messagesRef = database.ref('messages');
+            const newMessageRef = messagesRef.push();
+            
+            newMessageRef.set({
+                text: text,
+                user: {
+                    id: userId,
+                    name: username,
+                    device: userDevice
+                },
+                timestamp: Date.now()
+            })
+            .then(() => {
+                messageInput.value = '';
+                statusBar.textContent = "✓ Сообщение отправлено";
+            })
+            .catch((error) => {
+                console.error("Ошибка отправки:", error);
+                statusBar.textContent = "⚠️ Ошибка отправки";
+            })
+            .finally(() => {
+                sendButton.disabled = false;
+                messageInput.focus();
+            });
         }
         
-        // Сохранение сообщений с обработкой ошибок
-        function saveMessages() {
-            try {
-                localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
-            } catch (e) {
-                console.error('Ошибка сохранения сообщений:', e);
-                showError("Ошибка сохранения. Очистите историю.");
-            }
-        }
+        // Обработчики событий
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
         
-        // Запуск приложения
-        window.addEventListener('DOMContentLoaded', init);
+        // Инициализация после загрузки Firebase
+        window.addEventListener('DOMContentLoaded', initChat);
     </script>
 </body>
 </html>

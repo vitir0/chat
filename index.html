@@ -1,394 +1,186 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=272, height=340, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Apple Watch Realtime Chat</title>
-    <style>
-        /* Стили остаются без изменений */
-        * {
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "San Francisco", sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            background: linear-gradient(135deg, #1a1a1a, #000);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            padding: 10px;
-        }
-        .watch-container {
-            width: 272px;
-            height: 340px;
-            background: #000;
-            border-radius: 38px;
-            padding: 20px;
-            box-shadow: 
-                0 0 0 4px #1a1a1a,
-                0 0 0 8px #3a3a3a,
-                0 20px 40px rgba(0, 0, 0, 0.8);
-            position: relative;
-            overflow: hidden;
-        }
-        .watch-screen {
-            width: 100%;
-            height: 100%;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            color: white;
-        }
-        .chat-header {
-            background: linear-gradient(to right, #007AFF, #00a8ff);
-            color: white;
-            padding: 12px 15px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 18px;
-            position: relative;
-        }
-        .chat-header::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 10%;
-            width: 80%;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.2);
-        }
-        #chat-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 5px;
-            background: #111;
-        }
-        .message {
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            border-radius: 18px;
-            max-width: 85%;
-            word-wrap: break-word;
-            animation: fadeIn 0.3s ease-out;
-            font-size: 14px;
-        }
-        .message.self {
-            background: linear-gradient(to right, #007AFF, #00a8ff);
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
-        }
-        .message.other {
-            background: #333;
-            margin-right: auto;
-            border-bottom-left-radius: 4px;
-        }
-        .message-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 3px;
-            opacity: 0.8;
-        }
-        .device-tag {
-            font-size: 9px;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 5px;
-        }
-        .watch-device {
-            background: rgba(0, 122, 255, 0.3);
-        }
-        .message-time {
-            font-size: 9px;
-            opacity: 0.7;
-            margin-top: 2px;
-            text-align: right;
-        }
-        .input-area {
-            display: flex;
-            gap: 8px;
-            padding: 10px 0 5px;
-            background: #000;
-            border-top: 1px solid #222;
-        }
-        #message-input {
-            flex: 1;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 24px;
-            background: #222;
-            color: white;
-            font-size: 14px;
-            outline: none;
-        }
-        #send-button {
-            background: linear-gradient(to right, #007AFF, #00a8ff);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            font-size: 18px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 5px rgba(0, 122, 255, 0.3);
-        }
-        .digital-crown {
-            position: absolute;
-            right: -8px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 35px;
-            height: 35px;
-            background: #1a1a1a;
-            border-radius: 50%;
-            border: 2px solid #3a3a3a;
-            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
-        }
-        .empty-chat {
-            text-align: center;
-            padding: 50px 20px;
-            color: #888;
-            font-size: 14px;
-        }
-        .typing-indicator {
-            display: none;
-            padding: 5px 10px;
-            background: #333;
-            border-radius: 15px;
-            width: fit-content;
-            margin: 5px 0 15px;
-        }
-        .typing-indicator span {
-            height: 8px;
-            width: 8px;
-            float: left;
-            margin: 0 2px;
-            background-color: #9E9EA1;
-            display: block;
-            border-radius: 50%;
-            opacity: 0.4;
-        }
-        .typing-indicator span:nth-of-type(1) {
-            animation: typing 1s infinite;
-        }
-        .typing-indicator span:nth-of-type(2) {
-            animation: typing 1s infinite 0.2s;
-        }
-        .typing-indicator span:nth-of-type(3) {
-            animation: typing 1s infinite 0.4s;
-        }
-        .status-bar {
-            position: absolute;
-            top: 5px;
-            left: 10px;
-            font-size: 10px;
-            color: #4cd964;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes typing {
-            0% { transform: translateY(0px); opacity: 0.4; }
-            50% { transform: translateY(-3px); opacity: 1; }
-            100% { transform: translateY(0px); opacity: 0.4; }
-        }
-        
-        /* Полоса прокрутки для Apple Watch */
-        #chat-container::-webkit-scrollbar {
-            width: 3px;
-        }
-        #chat-container::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-        }
-        #chat-container::-webkit-scrollbar-thumb {
-            background: #007AFF;
-            border-radius: 2px;
-        }
-    </style>
-    
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+  <title>Приватный чат для двоих</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 0;
+      padding: 15px;
+      background: #f0f2f5;
+    }
+    #chat {
+      max-width: 500px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      height: 95vh;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      max-width: 80%;
+      padding: 10px 15px;
+      margin-bottom: 10px;
+      border-radius: 18px;
+      word-break: break-word;
+    }
+    .my-msg { 
+      background: #dcf8c6;
+      align-self: flex-end;
+    }
+    .their-msg { 
+      background: #ffffff;
+      border: 1px solid #e5e5ea;
+      align-self: flex-start;
+    }
+    #input-area {
+      display: flex;
+      gap: 8px;
+    }
+    #messageInput {
+      flex: 1;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      font-size: 16px;
+    }
+    button {
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 0 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <div class="watch-container">
-        <div class="watch-screen">
-            <div class="chat-header">
-                <span id="header-text">Apple Watch Chat</span>
-                <div class="status-bar" id="status-bar">✓ Подключение...</div>
-            </div>
-            <div id="chat-container">
-                <div class="empty-chat" id="empty-chat">Загрузка чата...</div>
-            </div>
-            <div class="input-area">
-                <input type="text" id="message-input" placeholder="Сообщение..." autocomplete="off" disabled>
-                <button id="send-button" disabled>↑</button>
-            </div>
-        </div>
-        <div class="digital-crown"></div>
+  <div id="chat">
+    <div id="messages"></div>
+    <div id="input-area">
+      <input type="text" id="messageInput" placeholder="Напишите сообщение..." autofocus>
+      <button onclick="sendMessage()">Отпр</button>
     </div>
+  </div>
 
-    <script>
-        // Конфигурация Firebase (замените на свою)
-        const firebaseConfig = {
-            apiKey: "AIzaSyD4dA2Q1b1v3dJ6Q8z7v0KbXmZ7bVfY7j8",
-            authDomain: "apple-watch-chat-demo.firebaseapp.com",
-            databaseURL: "https://apple-watch-chat-demo-default-rtdb.firebaseio.com",
-            projectId: "apple-watch-chat-demo",
-            storageBucket: "apple-watch-chat-demo.appspot.com",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcd1234efgh5678ijkl90"
+  <script>
+    // Настройки PeerJS (P2P соединение)
+    const peer = new Peer({
+      host: 'peerjs-server.herokuapp.com',
+      secure: true,
+      port: 443,
+      debug: 3
+    });
+
+    let conn = null;
+    const MESSAGE_HISTORY = [];
+    const MY_ID = 'user_' + Math.random().toString(36).substr(2, 5);
+    
+    // Инициализация чата
+    peer.on('open', id => {
+      showSystemMessage(`Ваш ID: ${id}`);
+      showSystemMessage('Отправьте этот ID собеседнику');
+    });
+
+    // Обработка входящего соединения
+    peer.on('connection', connection => {
+      conn = connection;
+      setupConnection();
+      showSystemMessage('Собеседник подключился!');
+    });
+
+    // Отправка сообщения
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      
+      if(text && conn) {
+        const msg = {
+          text: text,
+          sender: 'Я',
+          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         };
+        
+        conn.send(msg);
+        addMessage(msg, 'my-msg');
+        input.value = '';
+        input.focus();
+      }
+    }
 
-        // Инициализация Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        
-        // Ссылки на элементы
-        const chatContainer = document.getElementById('chat-container');
-        const emptyChat = document.getElementById('empty-chat');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        const statusBar = document.getElementById('status-bar');
-        const headerText = document.getElementById('header-text');
-        
-        // Данные пользователя
-        let username = localStorage.getItem('chat_username');
-        let userDevice = 'Apple Watch';
-        let userId = localStorage.getItem('chat_user_id');
-        
-        // Определение устройства
-        function detectDevice() {
-            const ua = navigator.userAgent;
-            if (ua.includes('Apple Watch')) return 'Apple Watch Series 3';
-            if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
-            if (/Android/.test(ua)) return 'Android';
-            return 'Desktop';
-        }
-        
-        // Инициализация чата
-        function initChat() {
-            // Определяем устройство
-            userDevice = detectDevice();
-            
-            // Получаем имя пользователя
-            if (!username) {
-                username = prompt("Введите ваш никнейм:") || "Гость_" + Math.floor(Math.random() * 1000);
-                localStorage.setItem('chat_username', username);
-            }
-            
-            // Генерируем ID пользователя
-            if (!userId) {
-                userId = Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('chat_user_id', userId);
-            }
-            
-            headerText.textContent = `${username} · ${userDevice}`;
-            statusBar.textContent = "✓ Подключение...";
-            
-            // Включаем поле ввода
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            messageInput.focus();
-            
-            // Загружаем сообщения
-            loadMessages();
-        }
-        
-        // Загрузка сообщений в реальном времени
-        function loadMessages() {
-            statusBar.textContent = "✓ Загрузка сообщений...";
-            
-            const messagesRef = database.ref('messages');
-            
-            // Слушаем новые сообщения
-            messagesRef.on('child_added', (snapshot) => {
-                const message = snapshot.val();
-                addMessageToChat(
-                    message.user.name, 
-                    message.user.device, 
-                    message.text,
-                    new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                    message.user.id === userId
-                );
-                
-                statusBar.textContent = "✓ Онлайн";
-                emptyChat.style.display = 'none';
-            });
-        }
-        
-        // Добавление сообщения в интерфейс
-        function addMessageToChat(user, device, content, timestamp, isSelf = false) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isSelf ? 'self' : 'other'}`;
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <span>${user}</span>
-                    <span class="device-tag ${device.includes('Watch') ? 'watch-device' : ''}">${device}</span>
-                </div>
-                <div>${content}</div>
-                <div class="message-time">${timestamp}</div>
-            `;
-            
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-        
-        // Отправка сообщения
-        function sendMessage() {
-            const text = messageInput.value.trim();
-            if (!text) return;
-            
-            // Блокируем кнопку на время отправки
-            sendButton.disabled = true;
-            
-            // Отправляем сообщение
-            const messagesRef = database.ref('messages');
-            const newMessageRef = messagesRef.push();
-            
-            newMessageRef.set({
-                text: text,
-                user: {
-                    id: userId,
-                    name: username,
-                    device: userDevice
-                },
-                timestamp: Date.now()
-            })
-            .then(() => {
-                messageInput.value = '';
-                statusBar.textContent = "✓ Сообщение отправлено";
-            })
-            .catch((error) => {
-                console.error("Ошибка отправки:", error);
-                statusBar.textContent = "⚠️ Ошибка отправки";
-            })
-            .finally(() => {
-                sendButton.disabled = false;
-                messageInput.focus();
-            });
-        }
-        
-        // Обработчики событий
-        sendButton.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-        
-        // Инициализация после загрузки Firebase
-        window.addEventListener('DOMContentLoaded', initChat);
-    </script>
+    // Настройка обработчиков соединения
+    function setupConnection() {
+      conn.on('data', data => {
+        addMessage(data, 'their-msg');
+      });
+      
+      conn.on('close', () => {
+        showSystemMessage('Соединение прервано');
+      });
+    }
+
+    // Подключение к собеседнику
+    function connectToPeer() {
+      const peerId = prompt('Введите ID собеседника:');
+      if(peerId) {
+        conn = peer.connect(peerId);
+        setupConnection();
+        showSystemMessage('Подключаемся...');
+      }
+    }
+
+    // Добавление сообщения в чат
+    function addMessage(msg, className) {
+      const messagesDiv = document.getElementById('messages');
+      const msgElement = document.createElement('div');
+      
+      msgElement.className = `message ${className}`;
+      msgElement.innerHTML = `<b>${msg.sender}:</b> ${msg.text}<br><small>${msg.time}</small>`;
+      
+      messagesDiv.appendChild(msgElement);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Системные сообщения
+    function showSystemMessage(text) {
+      const messagesDiv = document.getElementById('messages');
+      const msgElement = document.createElement('div');
+      
+      msgElement.className = 'message system-msg';
+      msgElement.innerHTML = `<i>${text}</i>`;
+      
+      messagesDiv.appendChild(msgElement);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Кнопка подключения
+    setTimeout(() => {
+      const connectBtn = document.createElement('button');
+      connectBtn.textContent = 'Подключиться';
+      connectBtn.style.marginTop = '10px';
+      connectBtn.onclick = connectToPeer;
+      document.querySelector('#input-area').after(connectBtn);
+    }, 2000);
+
+    // Отправка по Enter
+    document.getElementById('messageInput').addEventListener('keypress', e => {
+      if(e.key === 'Enter') sendMessage();
+    });
+  </script>
+  
+  <!-- Подключаем PeerJS библиотеку -->
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </body>
 </html>

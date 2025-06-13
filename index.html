@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Watch Chat</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 10px;
+            background: #f0f2f5;
+            color: #333;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        .apple-watch {
+            max-width: 272px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 38px;
+            padding: 20px 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border: 2px solid #e0e0e0;
+        }
+        #chat-header {
+            text-align: center;
+            padding: 10px;
+            background: #007AFF;
+            color: white;
+            border-radius: 20px 20px 0 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        #chat-container {
+            height: 280px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            margin: 10px 0;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .message.self {
+            background: #007AFF;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        .message.other {
+            background: #e4e6eb;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+        .message-header {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 3px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .device-tag {
+            font-size: 10px;
+            background: rgba(0,0,0,0.1);
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+        .watch-device {
+            background: #d1e7ff;
+        }
+        #input-area {
+            display: flex;
+            gap: 8px;
+            padding: 10px 5px;
+        }
+        #message-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            font-size: 16px;
+            min-width: 0;
+        }
+        #send-button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        @media (max-width: 300px) {
+            .apple-watch {
+                border-radius: 30px;
+                padding: 15px 8px;
+            }
+            #chat-container {
+                height: 240px;
+            }
+            #message-input {
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="apple-watch">
+        <div id="chat-header">Apple Watch Chat</div>
+        <div id="chat-container"></div>
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Сообщение..." />
+            <button id="send-button">↑</button>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация
+        const SERVER_URL = "https://ВАШ_ЛОГИН.pythonanywhere.com";  // Замените на ваш реальный URL
+        let username = localStorage.getItem('chat_username');
+        let lastMessageId = 0;
+        let userDevice = 'Unknown';
+
+        // Определение устройства
+        function detectDevice() {
+            const ua = navigator.userAgent;
+            if (ua.includes('Apple Watch')) return 'Apple Watch Series 3';
+            if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+            if (/Android/.test(ua)) return 'Android';
+            return 'Desktop';
+        }
+
+        // Получение имени пользователя
+        if (!username) {
+            username = prompt("Введите ваш никнейм:");
+            if (!username) username = "Гость_" + Math.floor(Math.random() * 1000);
+            localStorage.setItem('chat_username', username);
+        }
+        
+        userDevice = detectDevice();
+        document.getElementById('chat-header').textContent += ` · ${username}`;
+
+        // Отправка сообщения
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message) {
+                // Добавляем свое сообщение сразу
+                addMessageToChat(username, userDevice, message, true);
+                input.value = '';
+                
+                // Отправляем на сервер
+                try {
+                    await fetch(`${SERVER_URL}/send_message`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            username: username,
+                            content: message
+                        })
+                    });
+                } catch (error) {
+                    console.error('Ошибка отправки:', error);
+                }
+            }
+        }
+
+        // Добавление сообщения в чат
+        function addMessageToChat(user, device, content, isSelf = false) {
+            const chat = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            
+            messageDiv.className = `message ${isSelf ? 'self' : 'other'}`;
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span>${user}</span>
+                    <span class="device-tag ${device.includes('Watch') ? 'watch-device' : ''}">${device}</span>
+                </div>
+                <div class="message-content">${content}</div>
+            `;
+            
+            chat.appendChild(messageDiv);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Получение сообщений (long-polling)
+        async function fetchMessages() {
+            try {
+                const response = await fetch(`${SERVER_URL}/get_messages?last_id=${lastMessageId}`);
+                const data = await response.json();
+                
+                if (data.messages.length > 0) {
+                    data.messages.forEach(msg => {
+                        // Не показываем свои же сообщения (они уже добавлены)
+                        if (msg.user !== username) {
+                            addMessageToChat(msg.user, msg.device, msg.content);
+                        }
+                        lastMessageId = msg.id;
+                    });
+                }
+                
+                // Отправляем пинг активности
+                await fetch(`${SERVER_URL}/ping`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: finger})
+                });
+            } catch (error) {
+                console.error('Ошибка получения сообщений:', error);
+            }
+            
+            // Повторяем запрос
+            setTimeout(fetchMessages, 3000);
+        }
+
+        // Обработчики событий
+        document.getElementById('send-button').addEventListener('click', sendMessage);
+        document.getElementById('message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Запускаем получение сообщений
+        fetchMessages();
+    </script>
+</body>
+</html>

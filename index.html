@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=272, height=340, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Apple Watch Chat</title>
+    <title>Apple Watch Chat - Рабочая версия</title>
     <style>
         * {
             box-sizing: border-box;
@@ -186,6 +186,13 @@
         .typing-indicator span:nth-of-type(3) {
             animation: typing 1s infinite 0.4s;
         }
+        .status-bar {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            font-size: 10px;
+            color: #4cd964;
+        }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(5px); }
@@ -215,9 +222,10 @@
         <div class="watch-screen">
             <div class="chat-header">
                 <span id="header-text">Apple Watch Chat</span>
+                <div class="status-bar" id="status-bar">✓ Работает</div>
             </div>
             <div id="chat-container">
-                <div class="empty-chat">Начните общение!<br>Отправьте первое сообщение.</div>
+                <div class="empty-chat" id="empty-chat">Начните общение!<br>Отправьте первое сообщение.</div>
                 <div class="typing-indicator" id="typing-indicator">
                     <span></span>
                     <span></span>
@@ -233,13 +241,20 @@
     </div>
 
     <script>
+        // Улучшенное хранилище сообщений
+        const CHAT_STORAGE_KEY = 'apple_watch_chat_messages_v2';
+        const USER_STORAGE_KEY = 'apple_watch_chat_user_v2';
+        
         // Данные пользователя
-        let username = localStorage.getItem('chat_username');
+        let username = localStorage.getItem(USER_STORAGE_KEY);
         let userDevice = 'Apple Watch';
-        let messages = JSON.parse(localStorage.getItem('chat_messages')) || [];
+        let messages = [];
         
         // Инициализация при загрузке
         function init() {
+            // Проверка и восстановление данных
+            checkStorage();
+            
             // Определение устройства
             const ua = navigator.userAgent;
             if (/iPhone|iPad|iPod/.test(ua)) userDevice = 'iPhone';
@@ -248,7 +263,7 @@
             // Получение имени пользователя
             if (!username) {
                 username = prompt("Введите ваш никнейм:") || "Гость_" + Math.floor(Math.random() * 1000);
-                localStorage.setItem('chat_username', username);
+                localStorage.setItem(USER_STORAGE_KEY, username);
             }
             
             document.getElementById('header-text').textContent = `${username} · ${userDevice}`;
@@ -267,14 +282,28 @@
             
             // Проверка поддержки localStorage
             if (!isLocalStorageSupported()) {
-                alert("Ваш браузер не поддерживает сохранение сообщений. Обновите браузер.");
+                showError("Ваш браузер не поддерживает сохранение сообщений");
+            }
+        }
+        
+        // Проверка и восстановление хранилища
+        function checkStorage() {
+            try {
+                const storedMessages = localStorage.getItem(CHAT_STORAGE_KEY);
+                if (storedMessages) {
+                    messages = JSON.parse(storedMessages);
+                }
+            } catch (e) {
+                console.error('Ошибка восстановления сообщений:', e);
+                localStorage.removeItem(CHAT_STORAGE_KEY);
+                messages = [];
             }
         }
         
         // Проверка поддержки localStorage
         function isLocalStorageSupported() {
             try {
-                const testKey = 'test';
+                const testKey = '__test__';
                 localStorage.setItem(testKey, testKey);
                 localStorage.removeItem(testKey);
                 return true;
@@ -283,13 +312,24 @@
             }
         }
         
+        // Показать ошибку
+        function showError(message) {
+            const statusBar = document.getElementById('status-bar');
+            statusBar.textContent = "⚠️ " + message;
+            statusBar.style.color = "#ff3b30";
+        }
+        
         // Загрузка сообщений
         function loadMessages() {
             const chatContainer = document.getElementById('chat-container');
+            const emptyChat = document.getElementById('empty-chat');
             
-            // Очищаем контейнер, но оставляем сообщение о пустом чате
+            // Очищаем контейнер, если есть сообщения
             if (messages.length > 0) {
+                emptyChat.style.display = 'none';
                 chatContainer.innerHTML = '';
+            } else {
+                emptyChat.style.display = 'block';
             }
             
             // Добавляем все сообщения
@@ -301,10 +341,11 @@
         // Добавление сообщения в чат
         function addMessageToChat(user, device, content, timestamp, isSelf = false) {
             const chat = document.getElementById('chat-container');
+            const emptyChat = document.getElementById('empty-chat');
             
-            // Убираем сообщение о пустом чате, если есть сообщения
-            if (chat.querySelector('.empty-chat')) {
-                chat.innerHTML = '';
+            // Скрываем сообщение о пустом чате
+            if (emptyChat.style.display !== 'none') {
+                emptyChat.style.display = 'none';
             }
             
             const messageDiv = document.createElement('div');
@@ -348,7 +389,7 @@
                 }
                 
                 // Сохраняем в localStorage
-                localStorage.setItem('chat_messages', JSON.stringify(messages));
+                saveMessages();
                 
                 // Показываем индикатор набора текста
                 const typingIndicator = document.getElementById('typing-indicator');
@@ -361,19 +402,19 @@
                     
                     const responses = [
                         "Привет! Как дела?",
-                        "Отличный чат!",
+                        "Рад тебя видеть в чате!",
                         "Что нового?",
-                        "Как настроение?",
-                        "Я тоже пользуюсь Apple Watch!",
-                        "Этот чат работает прямо на часах!",
-                        "Очень удобно общаться",
-                        "Попробуйте отправить еще сообщение",
-                        "На GitHub Pages все работает отлично",
-                        "Хорошая погода сегодня, правда?",
-                        "Что планируешь на выходные?",
-                        "Люблю такие технологичные решения",
-                        "Apple Watch - лучшие умные часы!",
-                        "У тебя отличный вкус в технологиях"
+                        "Отличное сообщение!",
+                        "Я тоже пользуюсь этим чатом",
+                        "Этот чат работает на GitHub Pages",
+                        "Очень удобно общаться прямо с часов",
+                        "Попробуй отправить еще одно сообщение",
+                        "Надеюсь, у тебя хороший день",
+                        "Интересно, как работает эта технология",
+                        "Apple Watch - это круто, согласен?",
+                        "Ты часто пользуешься часами для общения?",
+                        "Это сообщение пришло с сервера GitHub",
+                        "Чат отлично работает на Apple Watch Series 3"
                     ];
                     
                     const randomResponse = responses[Math.floor(Math.random() * responses.length)];
@@ -392,8 +433,18 @@
                     });
                     
                     // Сохраняем в localStorage
-                    localStorage.setItem('chat_messages', JSON.stringify(messages));
-                }, 1500 + Math.random() * 2500);
+                    saveMessages();
+                }, 1500 + Math.random() * 2000);
+            }
+        }
+        
+        // Сохранение сообщений с обработкой ошибок
+        function saveMessages() {
+            try {
+                localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+            } catch (e) {
+                console.error('Ошибка сохранения сообщений:', e);
+                showError("Ошибка сохранения. Очистите историю.");
             }
         }
         

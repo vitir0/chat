@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; }
-    body { 
-      font-family: Arial, sans-serif; 
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       margin: 0;
       padding: 15px;
-      background: #f0f2f5;
+      background: #f5f8fa;
+      color: #333;
     }
-    #chat {
+    #chat-container {
       max-width: 500px;
       margin: 0 auto;
       display: flex;
@@ -23,164 +24,238 @@
       overflow-y: auto;
       padding: 15px;
       background: white;
-      border-radius: 12px;
-      margin-bottom: 10px;
-      display: flex;
-      flex-direction: column;
+      border-radius: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     .message {
-      max-width: 80%;
       padding: 10px 15px;
       margin-bottom: 10px;
       border-radius: 18px;
+      max-width: 80%;
       word-break: break-word;
+      line-height: 1.4;
     }
-    .my-msg { 
+    .my-msg {
       background: #dcf8c6;
-      align-self: flex-end;
+      margin-left: auto;
     }
-    .their-msg { 
+    .their-msg {
       background: #ffffff;
       border: 1px solid #e5e5ea;
-      align-self: flex-start;
+      margin-right: auto;
+    }
+    .system-msg {
+      background: #f0f0f0;
+      margin: 10px auto;
+      text-align: center;
+      font-size: 0.9em;
+      padding: 8px;
+      border-radius: 8px;
     }
     #input-area {
       display: flex;
       gap: 8px;
+      padding: 8px 0;
     }
     #messageInput {
       flex: 1;
-      padding: 12px 15px;
+      padding: 12px 16px;
       border: 1px solid #ddd;
-      border-radius: 20px;
+      border-radius: 24px;
       font-size: 16px;
+      outline: none;
+    }
+    #messageInput:focus {
+      border-color: #007aff;
     }
     button {
       background: #007aff;
       color: white;
       border: none;
-      border-radius: 20px;
+      border-radius: 24px;
       padding: 0 20px;
       font-size: 16px;
+      font-weight: 500;
       cursor: pointer;
+      min-width: 80px;
+    }
+    #connection-panel {
+      margin-bottom: 15px;
+      background: white;
+      padding: 15px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .panel-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .id-display {
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      word-break: break-all;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="chat">
+  <div id="chat-container">
+    <div id="connection-panel">
+      <div class="panel-title">Ваш ID:</div>
+      <div id="my-id" class="id-display">Загрузка...</div>
+      <div class="panel-title">Подключиться к собеседнику:</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="peer-id-input" placeholder="Введите ID собеседника" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ddd">
+        <button onclick="connectToPeer()">Подключиться</button>
+      </div>
+    </div>
+    
     <div id="messages"></div>
+    
     <div id="input-area">
       <input type="text" id="messageInput" placeholder="Напишите сообщение..." autofocus>
-      <button onclick="sendMessage()">Отпр</button>
+      <button onclick="sendMessage()">Отправить</button>
     </div>
   </div>
 
   <script>
-    // Настройки PeerJS (P2P соединение)
-    const peer = new Peer({
-      host: 'peerjs-server.herokuapp.com',
-      secure: true,
-      port: 443,
-      debug: 3
-    });
-
-    let conn = null;
-    const MESSAGE_HISTORY = [];
-    const MY_ID = 'user_' + Math.random().toString(36).substr(2, 5);
+    // ========== КОНФИГУРАЦИЯ ==========
+    const SERVER_URL = "https://simple-peer-server.glitch.me"; // Бесплатный сервер для сигналов
     
-    // Инициализация чата
-    peer.on('open', id => {
-      showSystemMessage(`Ваш ID: ${id}`);
-      showSystemMessage('Отправьте этот ID собеседнику');
-    });
-
-    // Обработка входящего соединения
-    peer.on('connection', connection => {
-      conn = connection;
-      setupConnection();
-      showSystemMessage('Собеседник подключился!');
-    });
-
-    // Отправка сообщения
+    // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+    let peer = null;
+    let conn = null;
+    let myPeerId = null;
+    
+    // ========== ИНИЦИАЛИЗАЦИЯ ==========
+    window.addEventListener('DOMContentLoaded', init);
+    
+    async function init() {
+      // Создаем Peer
+      peer = new Peer();
+      
+      peer.on('open', id => {
+        myPeerId = id;
+        document.getElementById('my-id').textContent = id;
+        showSystemMessage('Ваш ID готов. Отправьте его собеседнику');
+      });
+      
+      peer.on('connection', connection => {
+        if (conn) {
+          connection.close();
+          showSystemMessage('Уже подключен другой собеседник');
+          return;
+        }
+        
+        conn = connection;
+        setupConnection();
+        showSystemMessage('Собеседник подключился!');
+      });
+      
+      peer.on('error', err => {
+        console.error('Peer error:', err);
+        showSystemMessage('Ошибка: ' + err.message);
+      });
+    }
+    
+    // ========== ФУНКЦИИ СОЕДИНЕНИЯ ==========
+    function connectToPeer() {
+      const peerId = document.getElementById('peer-id-input').value.trim();
+      
+      if (!peerId) {
+        showSystemMessage('Введите ID собеседника');
+        return;
+      }
+      
+      if (conn) {
+        showSystemMessage('Уже подключен собеседник');
+        return;
+      }
+      
+      try {
+        conn = peer.connect(peerId);
+        setupConnection();
+        showSystemMessage('Подключаемся...');
+      } catch (err) {
+        showSystemMessage('Ошибка подключения: ' + err.message);
+      }
+    }
+    
+    function setupConnection() {
+      conn.on('open', () => {
+        showSystemMessage('Соединение установлено!');
+      });
+      
+      conn.on('data', data => {
+        addMessage(data.text, 'their-msg', 'Собеседник');
+      });
+      
+      conn.on('close', () => {
+        showSystemMessage('Соединение разорвано');
+        conn = null;
+      });
+      
+      conn.on('error', err => {
+        showSystemMessage('Ошибка соединения: ' + err.message);
+        conn = null;
+      });
+    }
+    
+    // ========== ФУНКЦИИ ЧАТА ==========
     function sendMessage() {
       const input = document.getElementById('messageInput');
       const text = input.value.trim();
       
-      if(text && conn) {
-        const msg = {
-          text: text,
-          sender: 'Я',
-          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-        };
-        
-        conn.send(msg);
-        addMessage(msg, 'my-msg');
-        input.value = '';
-        input.focus();
-      }
-    }
-
-    // Настройка обработчиков соединения
-    function setupConnection() {
-      conn.on('data', data => {
-        addMessage(data, 'their-msg');
-      });
+      if (!text) return;
       
-      conn.on('close', () => {
-        showSystemMessage('Соединение прервано');
-      });
-    }
-
-    // Подключение к собеседнику
-    function connectToPeer() {
-      const peerId = prompt('Введите ID собеседника:');
-      if(peerId) {
-        conn = peer.connect(peerId);
-        setupConnection();
-        showSystemMessage('Подключаемся...');
+      if (!conn) {
+        showSystemMessage('Сначала подключитесь к собеседнику');
+        return;
       }
+      
+      // Отправляем сообщение
+      conn.send({ text: text });
+      
+      // Добавляем в свой чат
+      addMessage(text, 'my-msg', 'Вы');
+      
+      // Очищаем поле ввода
+      input.value = '';
+      input.focus();
     }
-
-    // Добавление сообщения в чат
-    function addMessage(msg, className) {
+    
+    function addMessage(text, className, sender) {
       const messagesDiv = document.getElementById('messages');
-      const msgElement = document.createElement('div');
+      const messageDiv = document.createElement('div');
       
-      msgElement.className = `message ${className}`;
-      msgElement.innerHTML = `<b>${msg.sender}:</b> ${msg.text}<br><small>${msg.time}</small>`;
+      messageDiv.className = `message ${className}`;
+      messageDiv.innerHTML = `<b>${sender}:</b> ${text}`;
       
-      messagesDiv.appendChild(msgElement);
+      messagesDiv.appendChild(messageDiv);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
-
-    // Системные сообщения
+    
     function showSystemMessage(text) {
       const messagesDiv = document.getElementById('messages');
-      const msgElement = document.createElement('div');
+      const messageDiv = document.createElement('div');
       
-      msgElement.className = 'message system-msg';
-      msgElement.innerHTML = `<i>${text}</i>`;
+      messageDiv.className = 'message system-msg';
+      messageDiv.textContent = text;
       
-      messagesDiv.appendChild(msgElement);
+      messagesDiv.appendChild(messageDiv);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
-
-    // Кнопка подключения
-    setTimeout(() => {
-      const connectBtn = document.createElement('button');
-      connectBtn.textContent = 'Подключиться';
-      connectBtn.style.marginTop = '10px';
-      connectBtn.onclick = connectToPeer;
-      document.querySelector('#input-area').after(connectBtn);
-    }, 2000);
-
+    
     // Отправка по Enter
     document.getElementById('messageInput').addEventListener('keypress', e => {
-      if(e.key === 'Enter') sendMessage();
+      if (e.key === 'Enter') sendMessage();
     });
   </script>
   
-  <!-- Подключаем PeerJS библиотеку -->
-  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+  <!-- Библиотека PeerJS -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
 </body>
 </html>
